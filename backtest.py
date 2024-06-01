@@ -46,19 +46,37 @@ class Optimize_eps:
             self.thresh_event_handlers.append(dclassifier.DC_EVENT_HANDLER(thresholds[j], classifiers[j]))
         
         
-        self.capital = capital
+        self.base = capital
+        self.exch = 0
+        self.budget = capital
         self.fix_fee = fix_fee
         self.var_fee = var_fee
         self.borrow_costs = borrow_costs
         self.max_invest_rate = invest_rate
         self.rf_rate = rf_rate
         self.Y = None
+        self.last_Up_price = 0
+        self.TRP_list={}
+        self.hist = []
 
     def reset(self):
         self.long_pos = {}
         self.short_pos = {}
         self.short = False
-        self.long = False     
+        self.long = False
+
+    def sell(self, price):
+        if self.base > 0:
+            self.base = self.base - self.fix_fee
+            self.other = self.base * price
+            self.base = 0
+            self.last_Up_price = price
+    
+    def buy(self, price):
+        if self.other > 0 and price < self.last_Up_price:
+            self.other = self.other - self.fix_fee
+            self.base = self.other/price
+            self.other = 0
 
     def check_status(self, price, time):
         """
@@ -75,7 +93,7 @@ class Optimize_eps:
         """
         TRP = 0
         TP_list_s = [0]*len(self.thresh_event_handlers)
-        TP_list_l = [0]*len(self.thresh_event_handlers)
+        TP_list_b = [0]*len(self.thresh_event_handlers)
         W_s = 0 #weights for buying
         W_b = 0 #weights for selling
 
@@ -92,53 +110,23 @@ class Optimize_eps:
                 TP_list_s[i] = int(time + os_length)
                 W_b += self.weights[i]
             else:
-                TP_list_l[i] = int(time + os_length)
+                TP_list_b[i] = int(time + os_length)
                 W_s += self.weights[i]  
 
         if W_s > W_b:
             TRP = w_avg(self.weights, TP_list_s)
+            self.TRP_list[TRP] = 'sell'
         
+        
+        if W_b > W_s:
+            TRP = w_avg(self.weights, TP_list_b)
+            self.TRP_list[TRP] = 'buy'
 
-        # wenn wir prognostizieren zu steigen gehen wir eine  long position ein
-        if wap_2 > wap_1:
-        #    self.enter_long(time, price_1)
-            
-            #maximales capital das wir investieren wollen
-            usable_cap = self.capital*self.max_invest_rate
-
-            #gesmatkapital sinkt da wir kaufen
-            self.capital -= usable_cap
-
-            #kaufen maximale share anzahl mit fix_fees und varfees includiert
-            shares = (usable_cap - self.fix_fee - usable_cap*self.var_fee)/price_1
-            #self.capital += ((price_2/price_1))*self.capital*self.max_invest_rate
-
-            
-            # ACHTUNG! Wir addieren nie unseren Gewinn direkt zum Capital, da wir eigentlich mehrere Positionen gleichzeitig eingehen,
-            # daher müssen zuerst alle positionen eingegangen werden, bevor wir das kapital mit unseren gewinnen/verlusten erhöhen/senken
-            return shares*price_2 - self.fix_fee - shares*price_2*self.var_fee
-
-        # wenn wir prognostizieren zu fallen gehen wir eine short position ein
-        if wap_2 < wap_1:
-            #print(1 - (price_2/price_1))
-            #self.capital -= ((price_2/price_1) - 1 )*self.capital*self.max_invest_rate
-
-            #maximales capital das wir investieren wollen
-            usable_cap = self.capital*self.max_invest_rate
-            #self.capital -= usable_cap
-            self.capital -= usable_cap*self.var_fee - self.fix_fee
-            # here is the amount of shares
-            shares = usable_cap/price_1
-            usable_cap -= usable_cap*self.var_fee - self.fix_fee
-            #if shares >100000 :
-            #    print(shares, price_1, price_2)
-            need_cap = shares*price_2 + self.fix_fee + shares*price_2*self.var_fee + self.borrow_costs
-
-            # ACHTUNG! Wir addieren nie unseren Gewinn direkt zum Capital, da wir eigentlich mehrere Positionen gleichzeitig eingehen,
-            # daher müssen zuerst alle positionen eingegangen werden, bevor wir das kapital mit unseren gewinnen/verlusten erhöhen/senken
-            return usable_cap - need_cap
-
-        return 0
+        if time in self.TRP_list:
+            if self.TRP_list[time] == 'buy':
+                self.buy(price)
+            else:
+                self.sell(price)
     
     
     def sharpe_ratio(self, ret, vol):
@@ -186,81 +174,48 @@ class Optimize_eps:
 
         return -np.percentile(data, (100 - level))
 
-    def evaluate(self, X):
+    def evaluate(self, weights):
         """
-        :param X: Market Data of asset
+        Evaluates the startegie in given dat for given thresholds
+
+        Parameters
+        ----------
+        weights:
+            list of weights sorted accordingly to 
+
+        Return
+        ------
+        sharpe ratio
         """
-        # als erstes teilen wir unser Datenset in die einzelnen Tage ein
-        X = X.groupby("date_id")
-        keys = list(X.groups.keys())
+        self.weights = weights
+        self.last_Up_price = 0
+        self.base = self.budget
+        self.TRP_list = {}
+        count = 0
+        for el in self.data:
+            self.check_status(el['Price'], count)
+            if self.other > 0:
+                self.heist.append((self.other - self.fix_fee)/el['Price'])
+            else:
+                self.hist.append(self.base)
+        
+        if self.other > 0:
+            self.other = self.other - self.fix_fee
+            self.base = self.other/self.data['Price'].iloc[-1]
+            self.other = 0
 
-        # Als zweites Teilen wir das Datenset in train_test_split (80% der tage zu 20% der Tage)
-        index = int(len(keys)*0.8)
 
-        hist_sec = []
-        hist_d = []
-
-
-        # Danach gehen wir durch jeden Tag unseres Test sets durch
-        for dat in keys[index:]:
-            print(dat)
-
-
-            # hier nehmen wir uns einen Tag heraus
-            self.Y = X.get_group(dat)
-            self.unique = self.Y["stock_id"].unique()
-            print(self.unique)
-
-            # jeden Tag haben wir 54 Zeitshritte von jeweils 10 sekunden
-            for i in range(54):
-
-                #print(i)
-                # wir suchen uns für Zeitpunkt i nun die am meisten versprechenden Stock_ids
-                stocks = self.max(i)
-
-                #print(stocks)
-
-                #für jede stock_id berechnen wir uns den profit
-                profit = 0
-                #print(stocks)
-                for stock in stocks:
-                    
-                    # Hier nehmen wir uns an dem Tag nur einträge für den einen stock (der Frame ist automatisch geordnet)
-                    Z = self.Y[self.Y["stock_id"] == stock]
-                    # wap_i+1 den wir vorhergesagen
-                    wap_2 = Z.iloc[i+1]["predicted_wap"]
-                    # wap_i den wir wissen
-                    wap_1 = Z.iloc[i]["predicted_wap"]
-
-                    #wir gehen jetz davon aus das wir dann schon zum Zeitpunkt i+1 sind und unseren verkauspreis kennen
-                    # price_i
-                    price_1 = Z.iloc[i]["reference_price"]
-                    # price_i+1
-                    price_2 = Z.iloc[i+1]["reference_price"]
-
-                    # jetzt evaluieren wir unseren Trade
-                    profit += self.check_status(price_1, price_2, wap_1, wap_2)
-                
-                self.capital += profit
-                # nachdem wir unsere Trades für den Zeitpunkt abgeschlossen haben, speichern wir unseren Vermögensstand in der historie
-                hist_sec.append(self.capital)
-            
-            # tägliche historie 
-            hist_d.append(self.capital)
-            
-            #hist.append(self.check_status(Y.iloc[i]["seconds_in_bucket"], Y.iloc[i]["reference_price"], 0, Y.iloc[-1]["predicted_wap"], exit=True))
-
-        # jetzt können wir unseren return, volatilität und sharpe ration berechnen
-        ret = (hist_sec[-1] - hist_sec[0])/hist_sec[0]
+        wealth = self.base - self.budget
+        ret = self.wealth/self.budget
 
         hist_sec = pd.Series(hist_sec)
-        hist_d = pd.Series(hist_d)
+        self.hist = pd.Series(self.hist)
 
 
-        vol = hist_sec.pct_change().dropna().std()
-        sharpe = self.sharpe_ratio(self.annualize_rets(hist_d), self.annualize_vol(hist_d))
-        print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(hist_d), "return", ret, "capital", self.capital)
+        vol = self.hist.pct_change().dropna().std()
+        sharpe = self.sharpe_ratio(self.annualize_rets(self.hist), self.annualize_vol(self.hist))
+        print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(self.hist), "return", ret, "capital", self.capital)
 
 
         
-        #return [sharpe, ret, vol]
+        return [sharpe, ret, vol]
