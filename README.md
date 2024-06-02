@@ -3,14 +3,14 @@ WUTIS 2024 Porject
 
 
 # TODO List
-### Solar System Exploration, 1950s – 1960s
+## Linus
+- [ ] Backtesting Environment
 
-- [ ] Mercury
-- [x] Venus
-- [x] Earth (Orbit/Moon)
-- [x] Mars
-- [ ] Jupiter
-- [ ] Saturn
-- [ ] Uranus
-- [ ] Neptune
-- [ ] Comet Haley
+## Vittorio
+- [ ] Regression
+
+## Paulina
+- [ ] Genetic Algorithm (Part 3.2.2 p. 11)
+
+## Paul
+- [ ] Classifier
