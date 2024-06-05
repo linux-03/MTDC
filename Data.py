@@ -23,6 +23,7 @@ class Data:
         pivoted_data = data.pivot_table(index='DATE_TIME', columns='CURRENCY_PAIR', values='CLOSE', aggfunc='first')
         index = pd.date_range(start=pivoted_data.index.min(), end=pivoted_data.index.max(), freq='15min')
         pivoted_data = pivoted_data.reindex(index)
+        pivoted_data.columns = pivoted_data.columns.rename('DATE_TIME')
 
         # A day with no data is assumed to either be a weekend or a holiday, and so won't be considered as missing data
         all_nan_days = pivoted_data.isna().groupby(pivoted_data.index.to_period('D')).agg('all').any(axis='columns')
