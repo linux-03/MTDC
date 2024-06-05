@@ -4,7 +4,7 @@ import numpy as np
 class DC_EVENT_DETECTOR:
     
     ## comment for trading strategy: if you want to know if a dc event has finished to classify and regress its os length have a look at the length od list returned by get_dc
-    def __init__(self, theta: float, start_time: int, start_price, float) -> None:
+    def __init__(self, theta: float, start_time: int, start_price: float) -> None:
         self.p_h = start_price
         self.p_l = start_price
         self.dc_end = start_time
@@ -12,6 +12,7 @@ class DC_EVENT_DETECTOR:
         self.os_start = start_time
         self.os_end = start_time
         self.event_up = True
+        self.theta = theta
         self.os_events = []
         self.dc_events = []
     
@@ -92,11 +93,11 @@ class DC_EVENT_DETECTOR:
 
 
 def classify_split_timeseries(data: pd.DataFrame, theta):
-    dc_handler = DC_EVENT_DETECTOR(theta, 0, data.iloc[0]['Price'])
+    dc_handler = DC_EVENT_DETECTOR(theta, 0, data.iloc[0])
     dc_class = []
 
-    for i in range(len(data['Price'])):
-        dc_handler.step(data['Price'].iloc[i], i)
+    for i in range(len(data)):
+        dc_handler.step(data.iloc[i], i)
 
     dc_events = dc_handler.get_dc()
 
