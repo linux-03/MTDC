@@ -95,9 +95,9 @@ def fitness(data, individual):
 
 
 def fittest(sample):
-    _, best_individual = min(sample, key=lambda x: x[0])
+    loss, best_individual = min(sample, key=lambda x: x[0])
 
-    return best_individual
+    return loss, best_individual
 
 
 ##############################################################################
@@ -153,8 +153,8 @@ def SRGP(data):
 
         for i in range(elite_size, pop_size):
             if random.random() < crossover_rate:
-                parent1 = fittest(random.sample(list(zip(fitnesses, pop)), tournament_size))
-                parent2 = fittest(random.sample(list(zip(fitnesses, pop)), tournament_size))
+                _, parent1 = fittest(random.sample(list(zip(fitnesses, pop)), tournament_size))
+                _, parent2 = fittest(random.sample(list(zip(fitnesses, pop)), tournament_size))
                 newpop[i] = crossover(parent1, parent2)
 
             if random.random() < mutation_rate:
@@ -163,6 +163,6 @@ def SRGP(data):
         pop = newpop
         fitnesses = [fitness(data, individual) for individual in pop]
     
-    best_individual = fittest(list(zip(fitnesses, pop)))
+    loss, best_individual = fittest(list(zip(fitnesses, pop)))
 
-    return best_individual               
+    return loss, best_individual               
