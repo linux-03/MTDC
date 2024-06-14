@@ -15,6 +15,7 @@ class DC_EVENT_DETECTOR:
         self.theta = theta
         self.os_events = []
         self.dc_events = []
+        self.prev_dc_price = None
     
 
     def step(self, price, time):
@@ -25,17 +26,17 @@ class DC_EVENT_DETECTOR:
                 self.p_l = price
                 self.dc_end = time # set end time of dc downturn event
                 self.os_events.append([self.os_start, self.os_end])
-                self.classifie_dc(trend='Down')
-                self.os_start = time + 1
-                self.os_end = time + 1 
-                self.dc_start = time + 1
+                self.classifie_dc(price, trend='Down')
+                self.os_start = time
+                self.os_end = time 
+                self.dc_start = time
             
             else:
                 # upgoing os event - set new highest price
                 if self.p_h < price:
                     self.p_h = price
                     self.dc_start = time # we set dc downturn start point if we never return back higher than now
-                    self.os_end = time - 1
+                    self.os_end = time
         
         else:
             #while being in downturning os event but still looking for directional change upwards
@@ -44,36 +45,35 @@ class DC_EVENT_DETECTOR:
                 self.p_h = price
                 self.dc_end = time #set end time of upturn os event
                 self.os_events.append([self.os_start, self.os_end])
-                self.classifie_dc(trend = 'Up')
-                self.dc_start = time + 1
-                self.os_end = time + 1
-                self.os_start = time + 1
+                self.classifie_dc(price, trend = 'Up')
+                self.dc_start = time
+                self.os_end = time
+                self.os_start = time
 
-            
             else:
                 # downgoing os event - set new lowest price
                 if self.p_l > price:
                     self.p_l = price
                     self.dc_start = time # we set dc upturn start point if we never return back lower than now
-                    self.os_end = time - 1
+                    self.os_end = time
     
-    def classifie_dc(self, trend = 'Up'):
-        dc_event = {"start": self.dc_start,
-                 "end": self.dc_end,
-                 "event_time": self.dc_end - self.dc_start,
-                 "event_price": (self.p_h - self.p_l) if trend=='Up' else (self.p_l - self.p_h),
-                 "prev_dc_end_price": 0,
-                 "prev_os": False if self.os_end == self.os_start else True,
-                 "flash": True if self.dc_end == self.dc_start else False}
+    def classifie_dc(self, price, trend = 'Up'):
+        dc_event = {
+            "start": self.dc_start,
+            "end": self.dc_end,
+            "event_time": self.dc_end - self.dc_start,
+            "event_price": (self.p_h - self.p_l) if trend=='Up' else (self.p_l - self.p_h),
+            "prev_dc_end_price": self.prev_dc_price,
+            "prev_os": False if self.os_end == self.os_start else True,
+            "flash": True if self.dc_end == self.dc_start else False,
+        }
+        dc_event["speed"] = abs(dc_event["event_price"] / dc_event["event_time"]) * 100
         
         
         if len(self.dc_events) == 0:
-            dc_event['prev_os'] = True
-            dc_event['prev_dc_end_price'] = self.p_l if trend=='Up' else self.p_h
-        else:
-            dc_event['prev_os'] = self.dc_events[-1]['end']
-        
+            dc_event['prev_os'] = False
 
+        self.prev_dc_price = price
         self.dc_events.append(dc_event)
 
     def get_os(self):
@@ -147,5 +147,3 @@ class DC_EVENT_HANDLER:
             return 0
         
         return self.regressor.predit(dc_class['event_time']), 'Up' if dc_data['event_price'] > 0 else 'Down'
-
-
