@@ -67,7 +67,10 @@ class DC_EVENT_DETECTOR:
             "prev_os": False if self.os_end == self.os_start else True,
             "flash": True if self.dc_end == self.dc_start else False,
         }
-        dc_event["speed"] = abs(dc_event["event_price"] / dc_event["event_time"]) * 100
+        if dc_event['flash']:
+            dc_event["speed"] = 0
+        else:
+            dc_event["speed"] = abs(dc_event["event_price"] / dc_event["event_time"]) * 100
         
         
         if len(self.dc_events) == 0:

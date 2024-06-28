@@ -23,9 +23,11 @@ def w_avg(weights: list, rev_points: list):
     """
     weights = np.array(weights)
     rev_points = np.array(rev_points)
+
+    #print("w_avg: ", weights, rev_points)
     try:
         W = np.dot(weights, rev_points)/np.sum(weights)
-
+        #print('W: ', W)
     except ZeroDivisionError:
         print('The sum of the weights are not allowed to be zero!')
     
@@ -34,19 +36,16 @@ def w_avg(weights: list, rev_points: list):
 
 class Optimize_eps:
     # we init with a few parameters: 100 000 1 0.03 0.0083 0.1 0.03
-    def __init__(self, data, thresholds, classifiers: list, regressors:list, capital=100000, fix_fee=0, var_fee=0.00, borrow_costs=0.000, invest_rate=0.1, rf_rate=0.03):
+    def __init__(self, data, thresholds, event_handlers: list, capital=100000, fix_fee=0, var_fee=0.00, borrow_costs=0.000, invest_rate=0.1, rf_rate=0.03):
         # here we set up all relevant backtesting variables like trading fees (fix + variable) and starting capital
         self.data = data
         self.weights = [0]*len(thresholds)
-        self.regressors = regressors
-        self.thresh_event_handlers = []
         
-        # initialize DC_EVENT_HANDLERS
-        for j in thresholds:
-            self.thresh_event_handlers.append(dclassifier.DC_EVENT_HANDLER(thresholds[j], classifiers[j]))
-        
+        self.thresh_event_handlers = event_handlers        
         
         self.base = capital
+        self.other = 0
+        self.wealth = 0
         self.exch = 0
         self.budget = capital
         self.fix_fee = fix_fee
@@ -60,10 +59,16 @@ class Optimize_eps:
         self.hist = []
 
     def reset(self):
-        self.long_pos = {}
-        self.short_pos = {}
-        self.short = False
-        self.long = False
+        self.other = 0
+        self.wealth = 0
+        self.exch = 0
+        self.last_Up_price = 0
+        self.TRP_list={}
+        self.hist = []
+        self.base = self.budget
+        self.other = 0
+        for i in range(len(self.thresh_event_handlers)):
+            self.thresh_event_handlers[i].reset()
 
     def sell(self, price):
         if self.base > 0:
@@ -77,6 +82,10 @@ class Optimize_eps:
             self.other = self.other - self.fix_fee
             self.base = self.other/price
             self.other = 0
+    
+
+    def hist(self):
+        return self.hist
 
     def check_status(self, price, time):
         """
@@ -97,23 +106,35 @@ class Optimize_eps:
         W_s = 0 #weights for buying
         W_b = 0 #weights for selling
 
-
+        #print('checkpoint')
         for i in range(len(self.thresh_event_handlers)):
-            os_length, trend  = self.thresh_event_handlers[i].step(price, time)
-
+            #print(self.thresh_event_handlers[i].step(price, time))
+            even_data = self.thresh_event_handlers[i].step(price, time)
+            os_length = even_data[0]
+            trend = even_data[1]
+            #print('Check:' ,os_length, ' , ', trend)
             # if we are alpha we skip
-            if not os_length:
+            if os_length == -1:
                 continue
+
+            #print('checkpoint')
 
             
             if trend ==  'Up':
                 TP_list_s[i] = int(time + os_length)
-                W_b += self.weights[i]
+                #print('Up', i, time, os_length)
+                #print('TP_list', i, TP_list_s)
+                #print('TRP', i, int(time + os_length))
+                W_s += self.weights[i]
             else:
                 TP_list_b[i] = int(time + os_length)
-                W_s += self.weights[i]  
+                #print('TP_list', i, TP_list_b)
+                #print('TRP', i, int(time + os_length))
+                #print('Down', i, time, os_length)
+                W_b += self.weights[i]  
 
-        if W_s > W_b:
+            
+        if W_s >= W_b:
             TRP = w_avg(self.weights, TP_list_s)
             self.TRP_list[TRP] = 'sell'
         
@@ -122,6 +143,7 @@ class Optimize_eps:
             TRP = w_avg(self.weights, TP_list_b)
             self.TRP_list[TRP] = 'buy'
 
+        #print(self.TRP_list)
         if time in self.TRP_list:
             if self.TRP_list[time] == 'buy':
                 self.buy(price)
@@ -176,7 +198,7 @@ class Optimize_eps:
 
     def evaluate(self, weights):
         """
-        Evaluates the startegie in given dat for given thresholds
+        Evaluates the startegie in given data for given weights
 
         Parameters
         ----------
@@ -187,35 +209,38 @@ class Optimize_eps:
         ------
         sharpe ratio
         """
+        self.reset()
         self.weights = weights
         self.last_Up_price = 0
         self.base = self.budget
         self.TRP_list = {}
         count = 0
         for el in self.data:
-            self.check_status(el['Price'], count)
+            self.check_status(el, count)
             if self.other > 0:
-                self.heist.append((self.other - self.fix_fee)/el['Price'])
+                self.hist.append((self.other - self.fix_fee)/el)
             else:
                 self.hist.append(self.base)
+            
+            count += 1
         
         if self.other > 0:
             self.other = self.other - self.fix_fee
-            self.base = self.other/self.data['Price'].iloc[-1]
+            self.base = self.other/self.data.iloc[-1]
             self.other = 0
 
 
-        wealth = self.base - self.budget
+        self.wealth = self.base - self.budget
         ret = self.wealth/self.budget
 
-        hist_sec = pd.Series(hist_sec)
+        #hist_sec = pd.Series(hist_sec)
         self.hist = pd.Series(self.hist)
 
 
         vol = self.hist.pct_change().dropna().std()
         sharpe = self.sharpe_ratio(self.annualize_rets(self.hist), self.annualize_vol(self.hist))
-        print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(self.hist), "return", ret, "capital", self.capital)
+        print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(self.hist), "return", ret, "capital", self.budget)
 
 
-        
-        return [sharpe, ret, vol]
+        # [sharpe, ret, vol]
+        return ret
