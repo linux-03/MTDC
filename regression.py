@@ -91,7 +91,8 @@ def eval_tree(node, DCl):
 
 
 def fitness(data, individual):
-    return math.sqrt(sum([(OSl - eval_tree(individual, DCl)) ** 2 for DCl, OSl in data]) / len(data))
+    #print(math.sqrt(sum([abs((1 - eval_tree(individual, DCl)/OSl)*100) for DCl, OSl in data]) / len(data)))
+    return math.sqrt(sum([abs((1 - eval_tree(individual, DCl)/OSl)*100) for DCl, OSl in data]) / len(data))
 
 
 def fittest(sample):

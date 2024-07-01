@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import pandas as pd
 
 
 def initialize_population(num_thresholds, num_chromosomes, population_size):
@@ -82,9 +83,9 @@ def genetic_algorithm(data, thresholds, backtest_strat  , population_size = 500,
 
         # 3. Form new population taking into account different selection method: elitism, uniform crossover and uniform mutation
         #new_population = []
-
+        fitness_vals_s = pd.Series(fitness_values).sort_values(ascending=False)
         # 3.1. Elitism: carry the best chromosome to the next generation
-        best_index = sorted(fitness_values, reverse=True)[:int(elitism_ratio*population_size)]
+        best_index = fitness_vals_s.index[:int(elitism_ratio*population_size)]
         new_population = [population[i] for i in best_index]
         #used_indices = {best_index}
 
@@ -104,28 +105,28 @@ def genetic_algorithm(data, thresholds, backtest_strat  , population_size = 500,
             pool_fitnesses_1 = [fitness_values[i] for i in pool_indices_1]
             pool_fitnesses_2 = [fitness_values[i] for i in pool_indices_2]
             
-            print('selection')
+            #print('selection')
             # Select the best two individuals from the pool
             parent1 = tournament_selection(pool_1, pool_fitnesses_1)
             parent2 = tournament_selection(pool_2, pool_fitnesses_2)
             
 
             #used_indices.update(pool_indices) #each individual can be a parent only once
-            print('crossover')
+            #print('crossover')
             # 3.2. Uniform Crossover: generate random number between 0 and 1 to decide if this chromosome will be recombined or replicate their parents
             if random.random() < crossover_prob:
                 # for uniform crossover, each gene has the same 0.5 probability of being swapped
                 child1, child2 = uniform_crossover(parent1, parent2)
             else:
                 child1, child2 = parent1[:], parent2[:]
-            print('mutation')
+            #print('mutation')
             # 3.3. Uniform Mutation: Iterate over each gene and mutate if random number is lower than mutation probability
         
             child1 = uniform_mutation(child1, mutation_prob)
             child2 = uniform_mutation(child2, mutation_prob)
-            print('add new')
+            #print('add new')
             new_population.extend([child1, child2])
-            print('end')
+            #print('end')
 
         # New population is formed
         population = new_population[:population_size]

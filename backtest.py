@@ -57,6 +57,7 @@ class Optimize_eps:
         self.last_Up_price = 0
         self.TRP_list={}
         self.hist = []
+        self.trading_hist = []
 
     def reset(self):
         self.other = 0
@@ -67,6 +68,7 @@ class Optimize_eps:
         self.hist = []
         self.base = self.budget
         self.other = 0
+        self.trading_hist = []
         for i in range(len(self.thresh_event_handlers)):
             self.thresh_event_handlers[i].reset()
 
@@ -121,34 +123,36 @@ class Optimize_eps:
 
             
             if trend ==  'Up':
-                TP_list_s[i] = int(time + os_length)
+                TP_list_s[i] = int(os_length)
                 #print('Up', i, time, os_length)
                 #print('TP_list', i, TP_list_s)
                 #print('TRP', i, int(time + os_length))
                 W_s += self.weights[i]
             else:
-                TP_list_b[i] = int(time + os_length)
+                TP_list_b[i] = int(os_length)
                 #print('TP_list', i, TP_list_b)
                 #print('TRP', i, int(time + os_length))
                 #print('Down', i, time, os_length)
                 W_b += self.weights[i]  
 
             
-        if W_s >= W_b:
+        if W_s > W_b:
             TRP = w_avg(self.weights, TP_list_s)
-            self.TRP_list[TRP] = 'sell'
+            self.TRP_list[int(time + TRP)] = 'sell'
         
         
         if W_b > W_s:
             TRP = w_avg(self.weights, TP_list_b)
-            self.TRP_list[TRP] = 'buy'
+            self.TRP_list[int(time + TRP)] = 'buy'
 
         #print(self.TRP_list)
         if time in self.TRP_list:
             if self.TRP_list[time] == 'buy':
                 self.buy(price)
+                self.trading_hist.append((time, price, 'buy'))
             else:
                 self.sell(price)
+                self.trading_hist.append((time, price, 'sell'))
     
     
     def sharpe_ratio(self, ret, vol):
@@ -235,11 +239,12 @@ class Optimize_eps:
 
         #hist_sec = pd.Series(hist_sec)
         self.hist = pd.Series(self.hist)
+        hist_d = self.hist[::96]
 
 
-        vol = self.hist.pct_change().dropna().std()
-        sharpe = self.sharpe_ratio(self.annualize_rets(self.hist), self.annualize_vol(self.hist))
-        print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(self.hist), "return", ret, "capital", self.budget)
+        vol = hist_d.pct_change().dropna().std()
+        sharpe = self.sharpe_ratio(self.annualize_rets(hist_d), self.annualize_vol(hist_d))
+        #print("vol", vol, "sharpe", sharpe, "ann_ret:", self.annualize_rets(hist_d), "return", ret, "capital", self.base)
 
 
         # [sharpe, ret, vol]

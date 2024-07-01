@@ -87,7 +87,7 @@ class DC_EVENT_DETECTOR:
         return self.dc_events
     
     def get_dc_data(self):
-        return pd.DataFrame(self.dc_events_data[-1])
+        return pd.DataFrame(self.dc_events[-1])
     
     def get_dc_count(self):
         return len(self.dc_events)
@@ -110,10 +110,9 @@ def classify_split_timeseries(data: pd.DataFrame, theta):
             dc_class.append(1)
         else:
             dc_class.append(0)
+    #delete last DC event as we dont know its type
 
-    dc_events = dc_events[:-1] #delete last DC event as we dont know its type
-
-    return pd.DataFrame(dc_events), dc_class
+    return pd.DataFrame(dc_events), dc_class, dc_handler.get_dc()
 
 
 class DC_EVENT_HANDLER:
